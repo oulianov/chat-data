@@ -1,0 +1,7 @@
+v: 0
+micros:
+  - name: app
+    src: .
+    engine: python
+    primary: true
+    dev: uvicorn main:app --reload --port 9000
