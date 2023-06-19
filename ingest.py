@@ -6,16 +6,18 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores.faiss import FAISS
 
+BASE_PATH = "/home/haxxor/projects/supercache/chat-data"
+
 
 def ingest_docs():
     """Get documents from web pages."""
     loader = ReadTheDocsLoader(
-        "/home/haxxor/projects/supercache/chat-langchain/karpathy.github.io",
+        f"{BASE_PATH}/karpathy.github.io/2022",
         custom_html_tag=("div", {"class": "page-content"}),
     )
     raw_documents = loader.load()
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
+        chunk_size=3000,
         chunk_overlap=200,
     )
     documents = text_splitter.split_documents(raw_documents)
@@ -23,8 +25,11 @@ def ingest_docs():
     vectorstore = FAISS.from_documents(documents, embeddings)
 
     # Save vectorstore
-    with open("vectorstore.pkl", "wb") as f:
+    with open(f"{BASE_PATH}/vectorstore.pkl", "wb") as f:
         pickle.dump(vectorstore, f)
+
+    with open(f"{BASE_PATH}/snippets.txt", "w") as f:
+        f.write("\n----\n".join([d.page_content for d in documents]))
 
 
 if __name__ == "__main__":
