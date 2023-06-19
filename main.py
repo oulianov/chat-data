@@ -4,7 +4,8 @@ import pickle
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from deta import Deta, _Base
+from fastapi import FastAPI, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.templating import Jinja2Templates
 from langchain.vectorstores import VectorStore
 
@@ -15,6 +16,12 @@ from schemas import ChatResponse
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 vectorstore: Optional[VectorStore] = None
+
+
+def get_db():
+    deta = Deta()
+    db = deta.Base("docs")
+    yield db
 
 
 @app.on_event("startup")
@@ -33,7 +40,7 @@ async def get(request: Request):
 
 
 @app.websocket("/chat")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, db: _Base = Depends(get_db)):
     await websocket.accept()
     question_handler = QuestionGenCallbackHandler(websocket)
     stream_handler = StreamingLLMCallbackHandler(websocket)
