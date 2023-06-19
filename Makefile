@@ -6,3 +6,7 @@ start:
 format:
 	black .
 	isort .
+
+.PHONY: ingest
+ingest:
+	bash ingest.sh
