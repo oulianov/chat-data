@@ -2,20 +2,35 @@
 import logging
 import pickle
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 from deta import Deta, _Base
 from fastapi import FastAPI, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.templating import Jinja2Templates
 from langchain.vectorstores import VectorStore
 
-from callback import QuestionGenCallbackHandler, StreamingLLMCallbackHandler
+from callback import (
+    QuestionGenCallbackHandler,
+    StreamingLLMCallbackHandler,
+    AsyncCallbackHandler,
+)
 from query_data import get_chain
 from schemas import ChatResponse
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 vectorstore: Optional[VectorStore] = None
+
+
+class InstaRepCallbackHandler(AsyncCallbackHandler):
+    """Callback handler for streaming LLM responses."""
+
+    def __init__(self, websocket):
+        self.websocket = websocket
+
+    async def on_rep(self, message: str, **kwargs: Any) -> None:
+        resp = ChatResponse(sender="bot", message=message, type="stream")
+        await self.websocket.send_json(resp.dict())
 
 
 def get_db():
@@ -43,9 +58,12 @@ async def get(request: Request):
 async def websocket_endpoint(websocket: WebSocket, db: _Base = Depends(get_db)):
     await websocket.accept()
     question_handler = QuestionGenCallbackHandler(websocket)
+    insta_rep_handler = InstaRepCallbackHandler(websocket)
     stream_handler = StreamingLLMCallbackHandler(websocket)
     chat_history = []
-    qa_chain = get_chain(vectorstore, question_handler, stream_handler)
+    qa_chain = get_chain(
+        vectorstore, question_handler, insta_rep_handler, stream_handler
+    )
     # Use the below line instead of the above line to enable tracing
     # Ensure `langchain-server` is running
     # qa_chain = get_chain(vectorstore, question_handler, stream_handler, tracing=True)
