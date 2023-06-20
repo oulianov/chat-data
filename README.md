@@ -8,5 +8,5 @@ Repo with ideas on how to leverage Generative AI to interact with unstructured d
 - [x] Gather data (Andrej Karpathy blog) and improve parsing
 - [x] Deployment & database
 - [x] Default responses to question
-- [] Metadata extraction
-- [] User feedback
+- [ ] Metadata extraction
+- [ ] User feedback
