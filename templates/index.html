@@ -77,25 +77,44 @@
                         p.innerHTML += data.message;
                     }
                     if (data?.sources !== null) {
-                        p.innerHTML += "<br><br>Sources: "
+                        var source_div = document.createElement("div");
+                        source_div.innerHTML += "<br><br>Sources: ";
                         for (let index = 0; index < data.sources.length; index++) {
                             // For now the backend only returns the unique source names
                             const source_name = data.sources[index];
-                            p.innerHTML += source_name;
+                            source_div.innerHTML += source_name;
                             if (index + 1 < data.sources.length){
-                                p.innerHTML += "; "
+                                source_div.innerHTML += "; "
                             }
                         }
-                    }
+                        p.appendChild(source_div);
+                    } 
                 } else if (data.type === "info") {
                     var header = document.getElementById('header');
                     header.innerHTML = data.message;
                 } else if (data.type === "end") {
+                    // Rename header
                     var header = document.getElementById('header');
                     header.innerHTML = "Ask a question";
+                    // Enable button
                     var button = document.getElementById('send');
                     button.innerHTML = "Send";
                     button.disabled = false;
+                    // Add feedback buttons
+                    var p = messages.lastChild.lastChild;
+                    var button_positive = document.createElement('button');
+                    button_positive.innerHTML = "👍";
+                    button_positive.style.width = '7%'; 
+                    var button_negative = document.createElement('button');
+                    button_negative.innerHTML = "👎";
+                    button_negative.style.width = '7%'; 
+                    var div = document.createElement("div");
+                    div.appendChild(button_negative);
+                    div.appendChild(button_positive);
+                    div.style.display = 'flex';
+                    div.style.justifyContent = 'flex-end';  // Align items to the right
+                    div.style.width = '100%';  // Expand to parent width
+                    p.appendChild(div);
                 } else if (data.type === "error") {
                     var header = document.getElementById('header');
                     header.innerHTML = "Ask a question";
