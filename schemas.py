@@ -1,5 +1,7 @@
 """Schemas for the chat app."""
 from pydantic import BaseModel, validator
+from typing import Optional, List
+from langchain.docstore.document import Document
 
 
 class ChatResponse(BaseModel):
@@ -8,6 +10,7 @@ class ChatResponse(BaseModel):
     sender: str
     message: str
     type: str
+    sources: Optional[List[str]] = None
 
     @validator("sender")
     def sender_must_be_bot_or_you(cls, v):

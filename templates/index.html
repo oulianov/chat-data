@@ -76,6 +76,17 @@
                     } else {
                         p.innerHTML += data.message;
                     }
+                    if (data?.sources !== null) {
+                        p.innerHTML += "<br><br>Sources: "
+                        for (let index = 0; index < data.sources.length; index++) {
+                            // For now the backend only returns the unique source names
+                            const source_name = data.sources[index];
+                            p.innerHTML += source_name;
+                            if (index + 1 < data.sources.length){
+                                p.innerHTML += "; "
+                            }
+                        }
+                    }
                 } else if (data.type === "info") {
                     var header = document.getElementById('header');
                     header.innerHTML = data.message;

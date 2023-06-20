@@ -18,7 +18,7 @@ BASE_PATH = "/home/haxxor/projects/supercache/chat-data"
 
 # Initialize
 deta = Deta()
-db = deta.Base("docs")
+db = deta.Base("chat_history")
 
 
 class CustomReadTheDocsLoader(ReadTheDocsLoader):

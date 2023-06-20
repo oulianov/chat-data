@@ -106,6 +106,8 @@ class CustomConversationalRetrievalChain(ConversationalRetrievalChain):
             )
             if self.return_source_documents:
                 output["source_documents"] = docs
+                await _run_manager.handlers[1].send_sources(sources=docs)
+
         output[self.output_key] = answer
         if self.return_generated_question:
             output["generated_question"] = new_question
@@ -136,12 +138,13 @@ def get_chain(
     question_handler,
     insta_rep_handler,
     stream_handler,
+    stream_end_handler,
     tracing: bool = False,
 ) -> ConversationalRetrievalChain:
     """Create a ConversationalRetrievalChain for question/answering."""
     # Construct a ConversationalRetrievalChain with a streaming llm for combine docs
     # and a separate, non-streaming llm for question generation
-    manager = AsyncCallbackManager([insta_rep_handler])
+    manager = AsyncCallbackManager([insta_rep_handler, stream_end_handler])
     question_manager = AsyncCallbackManager([question_handler])
     stream_manager = AsyncCallbackManager([stream_handler])
     if tracing:
@@ -164,7 +167,7 @@ def get_chain(
         verbose=True,
         temperature=0,
     )  # type: ignore
-    embeddings = OpenAIEmbeddings()
+    embeddings = OpenAIEmbeddings()  # type: ignore
     question_database = QuestionDatabase(embeddings=embeddings)
     question_database.update("who made this app ?", "It was made by Nicolas.")
     question_database.update(
@@ -183,7 +186,7 @@ def get_chain(
         combine_docs_chain=doc_chain,
         question_generator=question_generator,
         callback_manager=manager,
-        return_source_documents=False,
+        return_source_documents=True,
         question_database=question_database,
     )
     return qa
