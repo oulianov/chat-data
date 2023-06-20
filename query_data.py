@@ -1,18 +1,95 @@
 """Create a ConversationalRetrievalChain for question/answering."""
-from langchain.callbacks.manager import AsyncCallbackManager
+import numpy as np
+from typing import Dict, Any, Optional
+
+from langchain.callbacks.manager import AsyncCallbackManager, CallbackManagerForChainRun
 from langchain.callbacks.tracers import LangChainTracer
 from langchain.chains import ConversationalRetrievalChain
+from langchain.chains.conversational_retrieval.base import _get_chat_history
 from langchain.chains.chat_vector_db.prompts import CONDENSE_QUESTION_PROMPT, QA_PROMPT
 from langchain.chains.llm import LLMChain
 from langchain.chains.question_answering import load_qa_chain
 from langchain.chat_models import ChatOpenAI
 from langchain.vectorstores.base import VectorStore
-
+from langchain.prompts.prompt import PromptTemplate
+from langchain.embeddings import OpenAIEmbeddings
 
 # TODO : Use summary of summaries in the prompt template to give context
 # TODO : Understand if the user is talking about a document of the collection, and if so which one
 
-from langchain.prompts.prompt import PromptTemplate
+
+class QuestionDatabase:
+    # Idea : use this as a way to check if the question is close
+    # to something we know. If so, serve the reply.
+
+    def __init__(self, embeddings):
+        self.embeddings = embeddings  # embedding function
+        self.stored_queries: Dict[str, np.ndarray] = {}
+        self.stored_reponses: Dict[str, str] = {}
+
+    def get(self, query: str, min_similarity: float = 0.9) -> Optional[str]:
+        query_emb = self.embeddings._embedding_func(query)
+        closest_stored_query = None
+        closest_sim = None
+        for stored_query, stored_vector in self.stored_queries.items():
+            similarity = (stored_vector @ query_emb) / (
+                np.linalg.norm(stored_vector) * np.linalg.norm(query_emb)
+            )
+            if not closest_stored_query:
+                if similarity > min_similarity:
+                    closest_stored_query = stored_query
+                    closest_sim = similarity
+            else:
+                if closest_sim > similarity:
+                    closest_stored_query = stored_query
+                    closest_sim = similarity
+        if closest_stored_query:
+            return self.stored_reponses[closest_stored_query]
+        else:
+            return None
+
+    def update(self, query: str, response: str):
+        query_emb = self.embeddings._embedding_func(query)
+        self.stored_queries[query] = query_emb
+        self.stored_reponses[query] = response
+
+
+class CustomConversationalRetrievalChain(ConversationalRetrievalChain):
+    def __init__(self, *args, embeddings, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.question_database = QuestionDatabase(embeddings=embeddings)
+
+    def _call(
+        self,
+        inputs: Dict[str, Any],
+        run_manager: Optional[CallbackManagerForChainRun] = None,
+    ) -> Dict[str, Any]:
+        _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
+        question = inputs["question"]
+        get_chat_history = self.get_chat_history or _get_chat_history
+        chat_history_str = get_chat_history(inputs["chat_history"])
+
+        if chat_history_str:
+            callbacks = _run_manager.get_child()
+            new_question = self.question_generator.run(
+                question=question, chat_history=chat_history_str, callbacks=callbacks
+            )
+        else:
+            new_question = question
+        docs = self._get_docs(new_question, inputs)
+        new_inputs = inputs.copy()
+        new_inputs["question"] = new_question
+        new_inputs["chat_history"] = chat_history_str
+        answer = self.combine_docs_chain.run(
+            input_documents=docs, callbacks=_run_manager.get_child(), **new_inputs
+        )
+        output: Dict[str, Any] = {self.output_key: answer}
+        if self.return_source_documents:
+            output["source_documents"] = docs
+        if self.return_generated_question:
+            output["generated_question"] = new_question
+        return output
+
 
 CONDENSE_QUESTION_PROMPT = PromptTemplate.from_template(
     template="""Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question.
@@ -62,6 +139,7 @@ def get_chain(
         verbose=True,
         temperature=0,
     )  # type: ignore
+    embeddings = OpenAIEmbeddings()
 
     question_generator = LLMChain(
         llm=question_gen_llm, prompt=CONDENSE_QUESTION_PROMPT, callback_manager=manager
@@ -70,10 +148,12 @@ def get_chain(
         streaming_llm, chain_type="stuff", prompt=QA_PROMPT, callback_manager=manager
     )
 
-    qa = ConversationalRetrievalChain(
+    qa = CustomConversationalRetrievalChain(
         retriever=vectorstore.as_retriever(k=3),
         combine_docs_chain=doc_chain,
         question_generator=question_generator,
         callback_manager=manager,
+        return_source_documents=True,
+        embeddings=embeddings,
     )
     return qa

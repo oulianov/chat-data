@@ -5,7 +5,7 @@ import markdownify
 from deta import Deta
 from langchain.document_loaders import ReadTheDocsLoader
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter, Language
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains.summarize import load_summarize_chain
 from langchain.vectorstores.faiss import FAISS
 
@@ -15,9 +15,6 @@ BASE_PATH = "/home/haxxor/projects/supercache/chat-data"
 # Initialize
 deta = Deta()
 db = deta.Base("docs")
-
-from langchain.docstore.document import Document
-from langchain.document_loaders.base import BaseLoader
 
 
 class CustomReadTheDocsLoader(ReadTheDocsLoader):
@@ -54,7 +51,7 @@ class CustomReadTheDocsLoader(ReadTheDocsLoader):
         # trim empty lines
         return "\n".join([t for t in text.split("\n") if t])
 
-    def _html_to_text(self, html_data: str) -> str:
+    def _html_to_markdown(self, html_data: str) -> str:
         return markdownify.markdownify(html_data).strip()
 
 
@@ -103,7 +100,7 @@ def ingest_docs():
             "<nav",
             # Head
             "<head",
-            "<style",
+            # "<style",
             "<script",
             "<meta",
             "<title",
@@ -111,10 +108,10 @@ def ingest_docs():
         ],
     )
     documents = text_splitter.split_documents(raw_documents)
-    # Convert HTML to text
+    # Convert HTML to markdown
     text_documents = []
     for d in documents:
-        d.page_content = loader._html_to_text(d.page_content).strip()
+        d.page_content = loader._html_to_markdown(d.page_content)
         # Ignore empty docs
         if d.page_content != "":
             text_documents.append(d)
