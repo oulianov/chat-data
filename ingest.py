@@ -1,14 +1,18 @@
 """Load html from files, clean up, split, ingest into Weaviate."""
 import pickle
+import re
 import markdownify
 
+from typing import List
 from deta import Deta
+
 from langchain.document_loaders import ReadTheDocsLoader
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains.summarize import load_summarize_chain
 from langchain.vectorstores.faiss import FAISS
-
+from langchain.chat_models import ChatOpenAI
+from langchain.docstore.document import Document
 
 BASE_PATH = "/home/haxxor/projects/supercache/chat-data"
 
@@ -23,7 +27,7 @@ class CustomReadTheDocsLoader(ReadTheDocsLoader):
     def _clean_data(self, data: str) -> str:
         from bs4 import BeautifulSoup
 
-        soup = BeautifulSoup(data, "lxml", **self.bs_kwargs)
+        soup = BeautifulSoup(data, **self.bs_kwargs)
 
         # remove style tags
         style_tags = soup.find_all("style")
@@ -40,19 +44,25 @@ class CustomReadTheDocsLoader(ReadTheDocsLoader):
         for a in a_tags:
             a.unwrap()
 
-        # fetch page-content div (where the content of the article is)
-        text = soup.find("div", {"class": "page-content"})
+        text = ""
+        # fetch header
+        blog_header = soup.find("header")
+        if blog_header:
+            text += str(blog_header)
 
-        if text is not None:
+        # fetch page-content div (where the content of the article is)
+        blog_content = soup.find("div", {"class": "page-content"})
+        if blog_content is not None:
             # convert back to HTML string
-            text = str(text)
-        else:
-            text = ""
+            text += str(blog_content)
+
         # trim empty lines
         return "\n".join([t for t in text.split("\n") if t])
 
     def _html_to_markdown(self, html_data: str) -> str:
-        return markdownify.markdownify(html_data).strip()
+        txt = markdownify.markdownify(html_data).strip()
+        txt = re.sub("\n\n+", "\n\n", txt)
+        return txt
 
 
 def ingest_docs():
@@ -60,6 +70,7 @@ def ingest_docs():
     loader = CustomReadTheDocsLoader(
         f"{BASE_PATH}/karpathy.github.io/2022",
         custom_html_tag=("div", {"class": "page-content"}),
+        features="lxml",
     )
 
     # TODO :
@@ -72,7 +83,6 @@ def ingest_docs():
     # push all of the structured data into a deta db
 
     raw_documents = loader.load()
-    # Split based on the HTML to make sensible chunks (ex: on new <div> or <p>)
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=2000,
         chunk_overlap=200,
@@ -107,18 +117,37 @@ def ingest_docs():
             "",
         ],
     )
-    documents = text_splitter.split_documents(raw_documents)
-    # Convert HTML to markdown
-    text_documents = []
-    for d in documents:
-        d.page_content = loader._html_to_markdown(d.page_content)
-        # Ignore empty docs
-        if d.page_content != "":
-            text_documents.append(d)
-    documents = text_documents
+
+    summarize_llm = ChatOpenAI(
+        model="gpt-3.5-turbo",
+        temperature=0,
+        verbose=True,
+    )  # type: ignore
+    summarization_chain = load_summarize_chain(llm=summarize_llm, chain_type="stuff")
+
+    documents: List[Document] = []
+    summaries: List[str] = []
+    # TODO : tags = []
+    # TODO : async
+    for doc in raw_documents:
+        # Split based on the HTML to make sensible chunks (ex: on new <div> or <p>)
+        splitted_doc = text_splitter.split_documents([doc])
+        splitted_doc_clean = []
+        # Convert HTML to markdown
+        for d in splitted_doc:
+            d.page_content = loader._html_to_markdown(d.page_content)
+            # Ignore empty docs
+            if d.page_content != "":
+                splitted_doc_clean.append(d)
+                documents.append(d)
+        # Generate summary
+        summary = summarization_chain({"input_documents": splitted_doc_clean})[
+            "output_text"
+        ]
+        summaries.append(summary)
 
     embeddings = OpenAIEmbeddings()  # type: ignore
-    vectorstore = FAISS.from_documents(text_documents, embeddings)
+    vectorstore = FAISS.from_documents(documents, embeddings)
 
     # Save vectorstore
     with open(f"{BASE_PATH}/vectorstore.pkl", "wb") as f:
@@ -126,6 +155,11 @@ def ingest_docs():
 
     with open(f"{BASE_PATH}/snippets.txt", "w") as f:
         f.write("\n----\n".join([d.page_content for d in documents]))
+
+    # Save metadata
+    # TODO !
+    for summary in summaries:
+        db.put({"summary": summary})
 
 
 if __name__ == "__main__":

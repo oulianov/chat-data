@@ -1,6 +1,6 @@
 """Create a ConversationalRetrievalChain for question/answering."""
 import numpy as np
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from langchain.callbacks.manager import (
     AsyncCallbackManager,
@@ -16,6 +16,8 @@ from langchain.chat_models import ChatOpenAI
 from langchain.vectorstores.base import VectorStore
 from langchain.prompts.prompt import PromptTemplate
 from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores.faiss import FAISS
+
 
 # TODO : Use summary of summaries in the prompt template to give context
 # TODO : Understand if the user is talking about a document of the collection, and if so which one
@@ -29,6 +31,8 @@ class QuestionDatabase:
         self.embeddings = embeddings  # embedding function
         self.stored_queries: Dict[str, np.ndarray] = {}
         self.stored_reponses: Dict[str, str] = {}
+        # TODO : replace vector storage by FAISS
+        # self.vector_store = FAISS
 
     def get(self, query: str, min_similarity: float = 0.9) -> Optional[str]:
         query_emb = np.array(self.embeddings.embed_query(query))
@@ -56,6 +60,10 @@ class QuestionDatabase:
         query_emb = np.array(self.embeddings.embed_query(query))
         self.stored_queries[query] = query_emb
         self.stored_reponses[query] = response
+
+    def batch_update(self, queries: List[str], responses: List[str]):
+        query_embs = self.embeddings.embed_documents(queries)
+        # TODO
 
 
 class CustomConversationalRetrievalChain(ConversationalRetrievalChain):
