@@ -1,171 +1,227 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>Chat Your Data</title>
-    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
+    <link
+      href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
     <style>
-        .chat-body {
-            width: 550px;
-            margin: 50px auto;
-        }
-        .card-body {
-            background-color: #333;
-            color: #fff;
-            border-radius: 10px;
-        }
-        .server-message {
-            background-color: #444;
-            padding: 10px;
-            margin: 10px;
-            border-radius: 10px;
-        }
-        .client-message {
-            background-color: #555;
-            padding: 10px;
-            margin: 10px;
-            border-radius: 10px;
-        }
-        .form-inline {
-            display: flex;
-            justify-content: space-between;
-        }
-        .form-control {
-            width: 80%;
-            background-color: #333;
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            padding: 10px;
-            margin-right: 10px;
-        }
-        #send {
-            background-color: #4C4CFF;
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            padding: 10px 20px;
-        }
-        .form-message {
-          margin-top: 10px;
-        }
+      .chat-body {
+        width: 550px;
+        margin: 50px auto;
+      }
+      .card-body {
+        background-color: #333;
+        color: #fff;
+        border-radius: 10px;
+      }
+      .server-message {
+        background-color: #444;
+        padding: 10px;
+        margin: 10px;
+        border-radius: 10px;
+      }
+      .client-message {
+        background-color: #555;
+        padding: 10px;
+        margin: 10px;
+        border-radius: 10px;
+      }
+      .form-inline {
+        display: flex;
+        justify-content: space-between;
+      }
+      .form-control {
+        width: 80%;
+        background-color: #333;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        padding: 10px;
+        margin-right: 10px;
+      }
+      #send {
+        background-color: #4c4cff;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        padding: 10px 20px;
+      }
+      .form-message {
+        margin-top: 10px;
+      }
     </style>
     <script>
-        var endpoint = "ws://localhost:9000/chat";
-        var ws = new WebSocket(endpoint);
-        // Receive message from server word by word. Display the words as they are received.
-        ws.onmessage = function (event) {
-            var messages = document.getElementById('messages');
-            var data = JSON.parse(event.data);
-            if (data.sender === "bot") {
-                if (data.type === "start") {
-                    var header = document.getElementById('header');
-                    header.innerHTML = "Computing answer...";
-                    var div = document.createElement('div');
-                    div.className = 'server-message';
-                    var p = document.createElement('p');
-                    p.innerHTML = "<strong>" + "Chatbot: " + "</strong>";
-                    div.appendChild(p);
-                    messages.appendChild(div);
-                } else if (data.type === "stream") {
-                    var header = document.getElementById('header');
-                    header.innerHTML = "Chatbot is typing...";
-                    var p = messages.lastChild.lastChild;
-                    if (data.message === "\n") {
-                        p.innerHTML += "<br>";
-                    } else {
-                        p.innerHTML += data.message;
-                    }
-                    if (data?.sources !== null) {
-                        var source_div = document.createElement("div");
-                        source_div.innerHTML += "<br><br>Sources: ";
-                        for (let index = 0; index < data.sources.length; index++) {
-                            // For now the backend only returns the unique source names
-                            const source_name = data.sources[index];
-                            source_div.innerHTML += source_name;
-                            if (index + 1 < data.sources.length){
-                                source_div.innerHTML += "; "
-                            }
-                        }
-                        p.appendChild(source_div);
-                    } 
-                } else if (data.type === "info") {
-                    var header = document.getElementById('header');
-                    header.innerHTML = data.message;
-                } else if (data.type === "end") {
-                    // Rename header
-                    var header = document.getElementById('header');
-                    header.innerHTML = "Ask a question";
-                    // Enable button
-                    var button = document.getElementById('send');
-                    button.innerHTML = "Send";
-                    button.disabled = false;
-                    // Add feedback buttons
-                    var p = messages.lastChild.lastChild;
-                    var button_positive = document.createElement('button');
-                    button_positive.innerHTML = "👍";
-                    button_positive.style.width = '7%'; 
-                    var button_negative = document.createElement('button');
-                    button_negative.innerHTML = "👎";
-                    button_negative.style.width = '7%'; 
-                    var div = document.createElement("div");
-                    div.appendChild(button_negative);
-                    div.appendChild(button_positive);
-                    div.style.display = 'flex';
-                    div.style.justifyContent = 'flex-end';  // Align items to the right
-                    div.style.width = '100%';  // Expand to parent width
-                    p.appendChild(div);
-                } else if (data.type === "error") {
-                    var header = document.getElementById('header');
-                    header.innerHTML = "Ask a question";
-                    var button = document.getElementById('send');
-                    button.innerHTML = "Send";
-                    button.disabled = false;
-                    var p = messages.lastChild.lastChild;
-                    p.innerHTML += data.message;
-                }
-            } else {
-                var div = document.createElement('div');
-                div.className = 'client-message';
-                var p = document.createElement('p');
-                p.innerHTML = "<strong>" + "You: " + "</strong>";
-                p.innerHTML += data.message;
-                div.appendChild(p);
-                messages.appendChild(div);
-            }
-            // Scroll to the bottom of the chat
-            messages.scrollTop = messages.scrollHeight;
-        };
-        // Send message to server
-        function sendMessage(event) {
-            event.preventDefault();
-            var message = document.getElementById('messageText').value;
-            if (message === "") {
-                return;
-            }
-            ws.send(message);
-            document.getElementById('messageText').value = "";
+      var endpoint = "ws://localhost:9000/chat";
+      var ws = new WebSocket(endpoint);
 
-            // Turn the button into a loading button
-            var button = document.getElementById('send');
-            button.innerHTML = "Loading...";
-            button.disabled = true;
+      function removeButtons() {
+        // Remove buttons
+        var button_positive = document.getElementById("feedback-positive");
+        button_positive.remove();
+        var button_negative = document.getElementById("feedback-negative");
+        button_negative.remove();
+      }
+
+      // Event handler for positive feedback button
+      function handlePositiveFeedback() {
+        // Make API call for positive feedback
+        // Implement your API call logic here
+        console.log("Positive feedback API call triggered");
+        removeButtons();
+      }
+
+      // Event handler for negative feedback button
+      function handleNegativeFeedback() {
+        // TODO
+        console.log("Negative feedback API call triggered");
+        // removeButtons();
+      }
+
+      // Receive message from server word by word. Display the words as they are received.
+      ws.onmessage = function (event) {
+        var messages = document.getElementById("messages");
+        var data = JSON.parse(event.data);
+        if (data.sender === "bot") {
+          if (data.type === "start") {
+            // Header
+            var header = document.getElementById("header");
+            header.innerHTML = "Computing answer...";
+
+            // Message box
+            var div = document.createElement("div");
+            div.className = "server-message";
+            var p = document.createElement("p");
+            p.innerHTML = "<strong>" + "Chatbot: " + "</strong>";
+            div.appendChild(p);
+            messages.appendChild(div);
+
+            // Remove buttons
+            removeButtons();
+          } else if (data.type === "stream") {
+            var header = document.getElementById("header");
+            header.innerHTML = "Chatbot is typing...";
+            var p = messages.lastChild.lastChild;
+            if (data.message === "\n") {
+              p.innerHTML += "<br>";
+            } else {
+              p.innerHTML += data.message;
+            }
+            if (data?.sources !== null) {
+              var source_div = document.createElement("div");
+              source_div.innerHTML += "<br><br>Sources: ";
+              for (let index = 0; index < data.sources.length; index++) {
+                // For now the backend only returns the unique source names
+                const source_name = data.sources[index];
+                source_div.innerHTML += source_name;
+                if (index + 1 < data.sources.length) {
+                  source_div.innerHTML += "; ";
+                }
+              }
+              p.appendChild(source_div);
+            }
+          } else if (data.type === "info") {
+            var header = document.getElementById("header");
+            header.innerHTML = data.message;
+          } else if (data.type === "end") {
+            // Rename header
+            var header = document.getElementById("header");
+            header.innerHTML = "Ask a question";
+            // Enable button
+            var button = document.getElementById("send");
+            button.innerHTML = "Send";
+            button.disabled = false;
+
+            // Add feedback buttons
+            var p = messages.lastChild.lastChild;
+
+            var button_positive = document.createElement("button");
+            button_positive.innerHTML = "👍";
+            button_positive.setAttribute("id", "feedback-positive");
+            button_positive.style.width = "7%";
+            button_positive.addEventListener("click", handlePositiveFeedback); // Add click event listener
+
+            var button_negative = document.createElement("button");
+            button_negative.innerHTML = "👎";
+            button_negative.setAttribute("id", "feedback-negative");
+            button_negative.style.width = "7%";
+            button_negative.addEventListener("click", handleNegativeFeedback); // Add click event listener
+
+            var div = document.createElement("div");
+            div.appendChild(button_negative);
+            div.appendChild(button_positive);
+            div.style.display = "flex";
+            div.style.justifyContent = "flex-end"; // Align items to the right
+            div.style.width = "100%"; // Expand to parent width
+            p.appendChild(div);
+          } else if (data.type === "error") {
+            var header = document.getElementById("header");
+            header.innerHTML = "Ask a question";
+            var button = document.getElementById("send");
+            button.innerHTML = "Send";
+            button.disabled = false;
+            var p = messages.lastChild.lastChild;
+            p.innerHTML += data.message;
+          }
+        } else {
+          var div = document.createElement("div");
+          div.className = "client-message";
+          var p = document.createElement("p");
+          p.innerHTML = "<strong>" + "You: " + "</strong>";
+          p.innerHTML += data.message;
+          div.appendChild(p);
+          messages.appendChild(div);
         }
+        // Scroll to the bottom of the chat
+        messages.scrollTop = messages.scrollHeight;
+      };
+      // Send message to server
+      function sendMessage(event) {
+        event.preventDefault();
+        var message = document.getElementById("messageText").value;
+        if (message === "") {
+          return;
+        }
+        ws.send(message);
+        document.getElementById("messageText").value = "";
+
+        // Turn the button into a loading button
+        var button = document.getElementById("send");
+        button.innerHTML = "Loading...";
+        button.disabled = true;
+      }
     </script>
-</head>
-<body class="bg-black">
+  </head>
+  <body class="bg-black">
     <div class="chat-body card">
-        <div class="card-body p-5">
-            <h4 class="card-title text-center text-xl font-medium"> Chat Your Data </h4>
-            <p class="card-text text-center text-sm" id="header"> Ask a question </p>
-            <hr class="border-gray-500 mb-5" style="margin-top: 20px;">
-            <div id="messages" class="overflow-auto" style="max-height: 500px;">
-            </div>
-            <form action="" class="form-inline mt-5" id="chat-form" onsubmit="sendMessage(event)">
-                <input type="text" class="form-control" placeholder="Write your question" id="messageText">
-                <button id="send" type="submit" class="btn btn-primary">Send</button>
-            </form>
-        </div>
+      <div class="card-body p-5">
+        <h4 class="card-title text-center text-xl font-medium">
+          Chat Your Data
+        </h4>
+        <p class="card-text text-center text-sm" id="header">Ask a question</p>
+        <hr class="border-gray-500 mb-5" style="margin-top: 20px" />
+        <div
+          id="messages"
+          class="overflow-auto"
+          style="max-height: 500px"
+        ></div>
+        <form
+          action=""
+          class="form-inline mt-5"
+          id="chat-form"
+          onsubmit="sendMessage(event)"
+        >
+          <input
+            type="text"
+            class="form-control"
+            placeholder="Write your question"
+            id="messageText"
+          />
+          <button id="send" type="submit" class="btn btn-primary">Send</button>
+        </form>
+      </div>
     </div>
-</body>
+  </body>
 </html>

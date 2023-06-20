@@ -96,6 +96,8 @@ class CustomConversationalRetrievalChain(ConversationalRetrievalChain):
             answer = answer_from_db
             await _run_manager.handlers[0].on_rep(message=answer)
             output["message"] = answer
+            if self.return_source_documents:
+                output["source_documents"] = []
         else:
             docs = await self._aget_docs(new_question, inputs)
             new_inputs = inputs.copy()
