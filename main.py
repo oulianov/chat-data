@@ -1,6 +1,7 @@
 """Main entrypoint for the app."""
 import logging
 import pickle
+import asyncio
 from pathlib import Path
 from typing import Optional, Any
 
@@ -29,8 +30,12 @@ class InstaRepCallbackHandler(AsyncCallbackHandler):
         self.websocket = websocket
 
     async def on_rep(self, message: str, **kwargs: Any) -> None:
-        resp = ChatResponse(sender="bot", message=message, type="stream")
-        await self.websocket.send_json(resp.dict())
+        # Make a nice scrolling effect by sending it word by word
+        all_words = message.split(" ")
+        for word in all_words:
+            resp = ChatResponse(sender="bot", message=word + " ", type="stream")
+            await self.websocket.send_json(resp.dict())
+            await asyncio.sleep(0.05)
 
 
 def get_db():
